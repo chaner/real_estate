@@ -3,8 +3,8 @@ class RmlsScraperJob
   attr_reader :browser
 
   def perform
-    Watir.default_timeout = 90
-    @browser = Watir::Browser.new :chrome, headless: true
+    Watir.default_timeout = 120
+    @browser = Watir::Browser.new :chrome, headless: false
 
     browser.goto 'http://www.rmls.com/rc2/UI/search_residential.asp'
     property_type = browser.select_list id: 'PROPERTY_TYPE'
@@ -66,6 +66,7 @@ class RmlsScraperJob
       puts "extracting rmls_number"
       listing['rmls_number'] = result_table.link(class: 'LINK_MLN').title.match(/\d+/)[0]
       result_table.rows.each do |r|
+        listing['image_url'] = r.img().src
         r.tables[1].rows.each do |detail_rows|
           detail_rows.cells.each do |cell|
             listing[:tuples] ||= []
@@ -83,7 +84,8 @@ class RmlsScraperJob
 
   def save_listings(listings)
     listings.each do |listing|
-      l = Listing.where(rmls_number: listing['rmls_number']).first_or_initialize
+      l = Listing.where(rmls_number: listing['rmls_number']).first_or_create
+      l.images.where(url: listing['image_url']).first_or_create
       if !l.new_record? && l.price != listing['price'].to_i
         PriceHistory.create(rmls_number: listing['rmls_number'], old_price: l.price, new_price: listing['price'])
       end
